@@ -1,0 +1,18 @@
+11:43:40.261 - connect with cartcam
+11:43:40.818 - cartcam, deviceId: 3 - image successfully taken
+11:43:41.702 - connect with eyecam
+11:43:42.403 - eyecam, deviceId: 1 - image successfully taken
+11:43:42.800 - start D415 stream successful
+11:43:44.194 - D415 stream stopped
+11:43:44.279 - start D415 stream successful
+11:43:44.976 - D415 rgb available
+11:43:45.020 - D415 depth points available
+11:43:45.036 - cams: dict_keys([2, 1, 3])
+11:43:45.073 - start forward move monitoring thread
+11:43:45.075 - start obstacle monitoring during forward move
+11:43:45.076 - waiting for imageProcessing commands
+11:43:46.177 - D415 stream stopped
+11:43:47.318 - start D415 stream successful
+11:43:47.318 - depth ahead check
+11:43:48.338 - D415 depth points available
+11:43:48.338 - start align points with ground, headPitch: -15

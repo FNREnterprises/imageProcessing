@@ -218,13 +218,11 @@ def groundObstacles(xyz):
     :param xyz:     points
     :return:        for each image col the first obstacle row
     """
+    rows, cols, _ = xyz.shape
 
     HEIGHT_THRESHOLD = 0.025
 
     config.log(f"eval closest obstacle per column", publish=False)
-
-    # the points in the bird view image (rotated points)
-    rows, cols, _ = xyz.shape
 
     # we are interested in the height values of the ground points only
     origHeights = xyz[:,:,2]
@@ -407,11 +405,11 @@ def showPoints(p, title):
     plt.show()
 
 
-def distGroundObstacles(points):
+def distGroundObstacles(points) :
     '''
     for ground obstacles use the height differences between points and not the absolute distance to cam
     :param points:
-    :return:
+    :return:    distance to closest obstacle, angle to obstacle
     '''
     # replace out of scope points with NaN
     # limit to robot's width

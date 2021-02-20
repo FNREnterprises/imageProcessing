@@ -10,26 +10,29 @@ import config
 
 class Camera(object):
 
-    def __init__(self, name, deviceId, cols, rows, fovH, fovV, rotate, numReads):
-        self.name = name
-        self.deviceId = deviceId
-        self.cols = cols
-        self.rows = rows
-        self.fovH = fovH
-        self.fovV = fovV
-        self.rotate = rotate
-        self.numReads = numReads
+    def __init__(self, properties):
+        self.name = properties['name']
+        self.deviceId = properties['deviceId']
+        self.cols = properties['cols']
+        self.rows = properties['rows']
+        self.fovH = properties['fovH']
+        self.fovV = properties['fovV']
+        self.rotate = properties['rotate']
+        self.numReads = properties['numReads']
         self.colAngle = self.fovH / self.cols
         self.rowAngle = self.fovV / self.rows
-        self.imgXCenter = int(cols/2)
+        self.imgXCenter = int(self.cols/2)
 
         self.handle = None
 
 
+    def saveImage(self, path):
+        cv2.imwrite(path, self.image)
+
 class UsbCamera(Camera):
 
-    def __init__(self, name, deviceId, cols, rows, fovH, fovV, rotate, numReads):
-        super().__init__(name, deviceId, cols, rows, fovH, fovV, rotate, numReads)
+    def __init__(self, properties):
+        super().__init__(properties)
 
         try:
             self.handle = cv2.VideoCapture(self.deviceId, cv2.CAP_DSHOW)
@@ -75,11 +78,6 @@ class UsbCamera(Camera):
             self.handle = None
             return False
 
-
-    def saveImage(self):
-        cv2.imwrite(f"initialCamImages/{self.name}.jpg", self.image)
-
-
     def loadImage(self, file):
         self.image = cv2.imread(file)
 
@@ -87,8 +85,8 @@ class UsbCamera(Camera):
 class D415Camera(Camera):
     # class for rgb and depth images
 
-    def __init__(self, name, deviceId, cols, rows, fovH, fovV, rotate, numReads):
-        super().__init__(name, deviceId, cols, rows, fovH, fovV, rotate, numReads)
+    def __init__(self, properties):
+        super().__init__(properties)
 
         self.handle = None
         self.D415config = None
@@ -229,14 +227,20 @@ class D415Camera(Camera):
             config.log(f"D415 depth points available")
             return True
 
+    def getDepthXyz(self):
+        # the points in the bird view image (rotated points)
+        rows = 240
+        cols = 428
+        return np.reshape(self.depth, (rows, cols, 3))
+
     def isCamStreaming(self):
         return self.streaming
 
-    def saveImage(self):
-        cv2.imwrite(f"initialCamImages/{self.name}Rgb.jpg", self.image)
+#    def saveImage(self):
+#        cv2.imwrite(f"initialCamImages/{self.name}Rgb.jpg", self.image)
 
 
-    def saveDepth(self):
+    def saveDepth(self, path):
         cv2.imwrite(f"initialCamImages/{self.name}DepthColored.jpg", self.depthColored)
         cv2.imwrite(f"initialCamImages/{self.name}Depth.jpg", self.depth)
 

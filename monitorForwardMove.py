@@ -7,33 +7,43 @@ import findObstacles
 
 from marvinglobal import marvinglobal as mg
 from marvinglobal import marvinShares
-from marvinglobal import servoCommandMethods
+from marvinglobal import skeletonCommandMethods
 
 # activated through imageProcessingQueue
 # checks for ground and wall obstacles
 
-def setRotheadNeck(rothead, neck):
+def setHeadDegrees(requestedRotheadDegrees, requestedNeckDegrees):
     '''
     move head and neck, verify with headImu and return new yaw,pitch
     return yaw, pitch
     '''
-    q = config.marvinShares.servoRequestQueue
-    m = config.servoCommandMethods
-    m.positionServo(q, "head.rothead", rothead, 500)
-    m.positionServo(q, "head.neck", neck, 500)
-    time.sleep(1)
-    headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
-    return headImu.yaw, headImu.pitch
+    q = config.marvinShares.skeletonRequestQueue
+    m = config.skeletonCommandMethods
+    m.requestDegrees(q, "head.rothead", requestedRotheadDegrees, 500)
+    m.requestDegrees(q, "head.neck", requestedNeckDegrees, 500)
+
+    startPositioningTime = time.time()
+    while True:
+        headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
+        rotheadPositioned = abs(headImu.yaw - requestedRotheadDegrees) < 3
+        neckPositioned = abs(headImu.pitch - requestedNeckDegrees) < 3
+        if rotheadPositioned and neckPositioned:
+            return True
+        if time.time() - startPositioningTime > 2:
+            config.log(
+            f"head did not move into requested position (yaw={headImu.yaw}, pitch={headImu.pitch})")
+            return False
 
 
 def monitorLoop():
 
     checkGround = False
-    checkAhead = False
+    checkAhead = True
     checkWall = False
 
-    config.log(f"start obstacle monitoring during forward move")
+    config.log(f"obstacle monitoring thread is running")
     d415 = config.cams[mg.D415]
+    headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
 
     while True:
 
@@ -49,20 +59,21 @@ def monitorLoop():
         if not d415.isCamStreaming():
             if not d415.startStream():
                 config.log(f"error in restarting D415 image stream")
-                # stop cart
+                config.inForwardMove = False
+                continue
 
         if checkGround:
 
             config.log(f"D415 ground check")
+            config.log(f"ground check with rotheadDegrees: 0, neckDegrees: {mg.pitchGroundWatchDegrees}")
 
-            # set headcam into watch ground position
-            #def positionServo(requestQueue, servoName, position, duration):
+            if not setHeadDegrees(0, mg.pitchGroundWatchDegrees):
+                continue
 
-            setRotheadNeck(0, config.pitchGroundWatchDegrees)
 
             if not d415.takeDepth():
                 config.log(f"could not acquire depth points")
-                return False
+                continue
 
             distClosestObstacle, obstacleDirection = findObstacles.distGroundObstacles(d415.depth)
 
@@ -76,21 +87,23 @@ def monitorLoop():
                     f"stop move forward because of a ground obstacle ahead in {distClosestObstacle * 100:.0f} cm at {obstacleDirection:.0f} degrees")
                 config.cartCommandMethods.stopCart(config.marvinShares.cartRequestQueue, "ground object detected")
                 config.flagInForwardMove = False
-                d415.stopStream()
 
 
         if checkAhead:   # check medium distance
 
-            config.log(f"depth ahead check")
+            config.log(f"check ahead obstacles with rotheadDegrees: 0, neckDegrees {mg.pitchAheadWatchDegrees}")
 
-            yaw, pitch = setRotheadNeck(0, config.pitchAheadWatchDegrees)
+            if not setHeadDegrees(0, mg.pitchAheadWatchDegrees):
+                continue
+
             freeMoveDistance = 0
 
             if not d415.takeDepth():
                 config.log(f"could not acquire the depth points")
+                continue
 
             else:
-                points = processDepth.alignPointsWithGround(d415.depth, config.pitchAheadWatchDegrees)
+                points = processDepth.alignPointsWithGround(d415.depth, mg.pitchAheadWatchDegrees)
 
                 freeMoveDistance, obstacleDirection = findObstacles.lookForCartPathObstacle(points)
                 config.log(f"obstacle in path: freeMoveDistance: {freeMoveDistance:.3f}, obstacleDirection: {obstacleDirection:.1f}")
@@ -111,20 +124,17 @@ def monitorLoop():
 
         if checkWall:   # check wall
 
-            config.log(f"depth wall check")
+            config.log(f"depth wall check with rotheadDegrees: 0, neckDegrees: {mg.pitchWallWatchDegrees}")
 
-            yaw, pitch = setRotheadNeck(0, config.pitchWallWatchDegrees)
-            if yaw is None:
-                config.log(f"moveRequest, could not position head")
-                return False
+            if not setHeadDegrees(0, mg.pitchWallWatchDegrees):
+                continue
 
-            points = camImages.cams[inmoovGlobal.HEAD_CAM].takeDepth()
-
-            if points is None:
+            if not d415.takeDepth():
                 config.log(f"could not acquire depth points")
-                return None, None
+                continue
 
-            distClosestObstacle, obstacleDirection, _ = findObstacles.aboveGroundObstacles(points, inmoovGlobal.pitchWallWatchDegrees)
+            distClosestObstacle, obstacleDirection = findObstacles.distGroundObstacles(d415.depth)
+
 
             if distClosestObstacle > 0.4:
                 config.log(f"continue driving, free move: {distClosestObstacle * 100:.0f} cm")
@@ -134,6 +144,6 @@ def monitorLoop():
             else:
                 config.log(
                     f"stop move forward because of a wall obstacle ahead in {distClosestObstacle * 100:.0f} cm at {obstacleDirection:.0f} degrees")
-                arduinoSend.sendStopCommand("wall object detected")
+                config.cartCommandMethods.stopCart(config.marvinShares.cartRequestQueue, "wall object detected")
                 config.flagInForwardMove = False
-                depthImage.stopD415Stream()
+

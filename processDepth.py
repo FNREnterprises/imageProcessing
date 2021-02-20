@@ -45,22 +45,17 @@ def calculateCamXYZ(useHeadImu=True):
         #return -68, (0, 0.267, 1.5)  # ground watch values
         return -45, (0,0.25,1.56) # wall watch values with headNeck -15
 
-    while not config.headImuSet:
-        config.log(f"wait for headImu")
-        time.sleep(1)
-
-    config.marvinShares.head
+    headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
     neckToCamDist = np.hypot(d415.D415_Y, d415.D415_Z)
-    camPosAngle = np.degrees(np.arctan(d415.D415_Z / d415.D415_Y)) \
-                  + config.headImuPitch
+    camPosAngle = np.degrees(np.arctan(d415.D415_Z / d415.D415_Y)) + headImu.pitch
 
     camY = config.robotNeckY + np.cos(np.radians(camPosAngle)) * neckToCamDist
     camZ = config.robotBaseZ + config.robotNeckZ + np.sin(np.radians(camPosAngle)) * neckToCamDist
 
-    camAngle = config.headImuPitch + config.D415_MountingPitch
+    camAngle = headImu.pitch + d415.D415_MountingPitch
 
     config.log(
-        f"headcamOrientation: head pitch: {config.headImuPitch}, D415 angle: {camAngle:.0f}, camZ: {camZ:.3f}")
+        f"headcamOrientation: head pitch: {headImu.pitch}, D415 angle: {camAngle:.0f}, camZ: {camZ:.3f}")
 
     return camAngle, (0, camY, camZ)
 

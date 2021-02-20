@@ -3,26 +3,27 @@ import datetime
 import logging
 
 from marvinglobal import marvinglobal as mg
-from marvinglobal import servoCommandMethods
+from marvinglobal import skeletonCommandMethods
 from marvinglobal import cartCommandMethods
 
 processName = 'imageProcessing'
 
 marvinShares = None   # shared data
-servoCommandMethods = servoCommandMethods.ServoCommandMethods()   # skeleton commands
+skeletonCommandMethods = skeletonCommandMethods.SkeletonCommandMethods()   # skeleton commands
 cartCommandMethods = cartCommandMethods.CartCommandMethods()
 
 cams = {}
 
 inForwardMove = False   # triggers monitoring with D415 cam
 
-# ground watch position of head for depth
-pitchGroundWatchDegrees = -35   # head.neck
-
-# ahead watch position of head for depth
-pitchAheadWatchDegrees = -15   # head.neck
-
-
+cartLength2 = 0.29      # meters, distance from cart center to cart front
+robotWidth = 0.6        # meters
+robotWidth2 = robotWidth/2        # meters
+robotHeight = 1.7       # meters
+robotBaseZ = 0.88       # standard table height (could be dynamic, not fully implemented yet)
+robotNeckZ = 0.63       # neck rotation point above base
+robotNeckY = 0.09       # neck position in relation to cart center
+distOffsetCamFromCartFront = 0.1    # meters
 
 # aruco calibration data path
 calibrationData = {mg.EYE_CAM: "d:/Projekte/InMoov/imageProcessing/arucoFiles/cartcamCalibration/",

@@ -24,7 +24,7 @@ def setHeadDegrees(requestedRotheadDegrees, requestedNeckDegrees):
 
     startPositioningTime = time.time()
     while True:
-        headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
+        headImu = config.marvinShares.cartDict.get(mg.SharedDataItems.HEAD_IMU)
         rotheadPositioned = abs(headImu.yaw - requestedRotheadDegrees) < 3
         neckPositioned = abs(headImu.pitch - requestedNeckDegrees) < 3
         if rotheadPositioned and neckPositioned:
@@ -42,8 +42,8 @@ def monitorLoop():
     checkWall = False
 
     config.log(f"obstacle monitoring thread is running")
-    d415 = config.cams[mg.D415]
-    headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
+    d415 = config.cams[mg.CamTypes.HEAD_CAM]
+    headImu = config.marvinShares.cartDict.get(mg.SharedDataItems.HEAD_IMU)
 
     while True:
 
@@ -85,7 +85,7 @@ def monitorLoop():
             else:
                 config.log(
                     f"stop move forward because of a ground obstacle ahead in {distClosestObstacle * 100:.0f} cm at {obstacleDirection:.0f} degrees")
-                config.cartCommandMethods.stopCart(config.marvinShares.cartRequestQueue, "ground object detected")
+                config.CartCommandsMethods.stopCart(config.marvinShares.cartRequestQueue, "ground object detected")
                 config.flagInForwardMove = False
 
 
@@ -118,7 +118,7 @@ def monitorLoop():
             else:
                 config.log(
                     f"stop move forward because of an obstacle ahead in {freeMoveDistance * 100:.0f} cm at {obstacleDirection:.0f} degrees")
-                config.cartCommandMethods.stopCart(config.marvinShares.cartRequestQueue,"object in cart path detected")
+                config.CartCommandsMethods.stopCart(config.marvinShares.cartRequestQueue,"object in cart path detected")
                 config.flagInForwardMove = False
 
 
@@ -144,6 +144,6 @@ def monitorLoop():
             else:
                 config.log(
                     f"stop move forward because of a wall obstacle ahead in {distClosestObstacle * 100:.0f} cm at {obstacleDirection:.0f} degrees")
-                config.cartCommandMethods.stopCart(config.marvinShares.cartRequestQueue, "wall object detected")
+                config.CartCommandsMethods.stopCart(config.marvinShares.cartRequestQueue, "wall object detected")
                 config.flagInForwardMove = False
 

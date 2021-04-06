@@ -5,6 +5,7 @@
 import os
 import sys
 import time
+import copy
 
 import cv2
 import imutils
@@ -14,6 +15,8 @@ from pyrecord import Record
 import glob
 
 from marvinglobal import marvinglobal as mg
+from marvinglobal import environmentClasses
+from typing import List
 
 import config
 
@@ -75,10 +78,11 @@ def log(msg):
     print(msg)
 
 
-def lookForMarkers(camera, markerIds, camYaw):
+def lookForMarkers(camType:mg.CamTypes, markerIds:List[int], camYaw, cartLocation:mg.Location):
+
     foundMarkers = []
 
-    img = config.cams[camera].image
+    img = config.camImages[camType].image
 
     # check for marker
     foundIds, corners = findMarkers(img, show=False)
@@ -90,15 +94,28 @@ def lookForMarkers(camera, markerIds, camYaw):
     if foundIds is not None:
         #config.log(f"markers found: {foundIds}")
         for markerIndex, foundId in enumerate(foundIds):
+
+            # check for markerId is requested
             if len(markerIds) == 0 or foundId in markerIds:
                 try:
-                    markerInfo = calculateMarkerFacts(corners[markerIndex], foundId, camera)
+                    marker:environmentClasses.Marker = environmentClasses.Marker()
+                    marker.markerId = foundId
+                    marker.camType = camType
+                    marker.cartLocation = cartLocation
+                    marker.camLocation = copy.copy(mg.camLocation[camType])     # cam location in relation to cart center
+                    marker.camLocation.addLocation(cartLocation)
+                    marker.camLocation.yaw = camYaw
+
+                    calculateMarkerFacts(corners[markerIndex], marker)
+
                 except Exception as e:
                     config.log(f"error in calculateMarkerFacts: {e}")
-                    markerInfo = None
-                if markerInfo is not None:
-                    config.log(f"markerId: {markerInfo['markerId']}, distance: {markerInfo['distanceCamToMarker']}, angleToMarker: {markerInfo['angleToMarker']}, markerDegrees: {markerInfo['markerDegrees']}")
-                    foundMarkers.append(markerInfo)
+                    marker = None
+
+                if marker is not None:
+                    config.log(f"markerId: {marker.markerId}, distance: {marker.distanceCamToMarker}, angleInImage: {marker.angleInImage}, "
+                               f"markerYaw: {marker.markerYaw}")
+                    foundMarkers.append(marker)
 
     return foundMarkers
 
@@ -134,17 +151,17 @@ def rotationMatrixToEulerAngles(R):
         y = np.arctan2(-R[2, 0], sy)
         z = np.arctan2(R[1, 0], R[0, 0])
     else:
-        x = np.atan2(-R[1, 2], R[1, 1])
-        y = np.atan2(-R[2, 0], sy)
+        x = np.arctan2(-R[1, 2], R[1, 1])
+        y = np.arctan2(-R[2, 0], sy)
         z = 0
 
     return np.array([y, x, z])
 
 
 # calculate a cartYaw for cart to be positioned <distance> in front of the marker
-def evalDegreesDistToCartTarget(degreesToMarker, distance, markerDegrees):
+def evalDegreesDistToCartTarget(degreesToMarker, distance, markerYaw):
     log(
-        f"evalDegreesDistToCartDestination degreesToMarker: {degreesToMarker:.0f}, distance: {distance:.0f}, markerDegrees: {markerDegrees:.0f}")
+        f"evalDegreesDistToCartDestination degreesToMarker: {degreesToMarker:.0f}, distance: {distance:.0f}, markerYaw: {markerYaw:.0f}")
 
     # Position x,y of camera
     p1 = point(0, 0)
@@ -155,8 +172,8 @@ def evalDegreesDistToCartTarget(degreesToMarker, distance, markerDegrees):
     p2.y = int(distance * np.sin(np.radians(degreesToMarker)))
     # print(p2)
 
-    # angle between marker and cart destination point (includes markerDegrees)
-    beta = degreesToMarker - 90 + markerDegrees
+    # angle between marker and cart destination point (includes markerYaw)
+    beta = degreesToMarker - 90 + markerYaw
 
     # cart destination point orthogonal in front of marker with offset
     p3 = point(0, 0)
@@ -205,45 +222,36 @@ def findMarkers(cam, show):
     return ids, corners
 
 
-def calculateMarkerFacts(corners, markerId, camera):
+def calculateMarkerFacts(corners, marker):
     """
     aruco.estimatePoseSingleMarkers looks to be a bit unprecise, use own calcs for distance and direction
     :param corners:
-    :param markerId:
-    :param camera:
-    :return:
+    :param marker:  partially filled marker object
     """
 
-    # marker = markerTypes[markerType=="dockingMarker"]
-    marker = [m for m in markerTypes if markerId in m.allowedIds]
+    # check for marker is an allowed marker type
+    markerType = [m for m in markerTypes if marker.markerId in m.allowedIds]
     #config.log(f"markerId: {markerId}, markerSize: {marker[0].length}")
 
-    if marker is None or len(marker) == 0:
+    if markerType is None or len(markerType) == 0:
         return None
 
-    if camera == "CART_CAM":
-        colAngle = config.cams[mg.CART_CAM].fovH / config.cams[mg.CART_CAM].cols
-        rowAngle = CARTCAM_Y_ANGLE / CARTCAM_Y_RESOLUTION
-        imgXCenter = CARTCAM_X_RESOLUTION / 2
-        vec = aruco.estimatePoseSingleMarkers(corners, marker[0].length, config.cartcamMatrix,
-                                          config.cartcamDistortionCoeffs)  # For a single marker
+    camProps = mg.camProperties[marker.camType]
+    #camMatrix = config.calibrationMatrix[marker.camType]
+    #camDistortionCoeffs = config.calibrationDistortion[marker.camType]
 
-    else:
-        colAngle = EYECAM_X_ANGLE / EYECAM_X_RESOLUTION
-        rowAngle = EYECAM_Y_ANGLE / EYECAM_Y_RESOLUTION
-        imgXCenter = EYECAM_X_RESOLUTION / 2
-        vec = aruco.estimatePoseSingleMarkers(corners, marker[0].length, config.eyecamMatrix,
-                                          config.eyecamDistortionCoeffs)  # For a single marker
+    colAngle = camProps['fovH'] / camProps['cols']
+    rowAngle = camProps['fovV'] / camProps['rows']
+    imgXCenter = camProps['cols'] / 2
+    # use corners to calc yaw of marker
+    #vec = aruco.estimatePoseSingleMarkers(corners, marker[0].length, camMatrix,
+    #                                  camDistortionCoeffs)  # For a single marker
 
     # my markers are not rotated, use average of marker height on left and right side for distance calculation
     # corner indices are clockwise starting with topleft (second index)
     config.log(f"corners: {corners[0]}", publish=False)
-    tl=0
-    tr=1
-    br=2
-    bl=3
-    col=0
-    row=1
+    tl, tr, br, bl = 0, 1, 2, 3
+    col, row = 0, 1
     centerCol = (corners[0][tr][col] + corners[0][tl][col]) / 2
     # eval left and right marker height in rows
     markerRowsLeft = corners[0][bl][row] - corners[0][tl][row]
@@ -255,32 +263,28 @@ def calculateMarkerFacts(corners, markerId, camera):
 
     # using the known size of the marker the distance is adj=opp/tan
     # use abs value as eye cam delivers a rotated map
-    distanceCamToMarker = abs(marker[0].length / np.tan(np.radians(heightAngle)))
+    marker.distanceCamToMarker = abs(marker[0].length / np.tan(np.radians(heightAngle)))
 
     # use the markers center col to calc the angle to the marker
-    angleToMarker = (imgXCenter - centerCol) * colAngle
-    config.log(f"angleToMarker, centerCol: {centerCol}, offset: {imgXCenter - centerCol}, colAngle: {colAngle}")
+    marker.angleInImage = (imgXCenter - centerCol) * colAngle
+    config.log(f"angleInImage, centerCol: {centerCol}, offset: {imgXCenter - centerCol}, colAngle: {colAngle}")
 
     # eval the marker's yaw from the result of aruco.estimatePoseSingleMarkers
     rmat = cv2.Rodrigues(vec[0])[0]
     yrp = rotationMatrixToEulerAngles(rmat)
 
-    # markerDegrees is 0 for an orthogonal view position,
+    # markerYaw is 0 for an orthogonal view position,
     # negative for a viewpoint right of the marker
     # positive for a viewpoint left of the marker
-    markerDegrees = float(-np.degrees(yrp[0]))  # ATTENTION, this is the yaw of the marker evaluated from the image
+    marker.markerLocation.yaw = float(-np.degrees(yrp[0]))  # ATTENTION, this is the yaw of the marker evaluated from the image
 
-    # for distances > 1500 markerDegrees are not accurate, reduce value
-    if distanceCamToMarker > 1500:
-        config.log(f"corrected markerDegrees from {markerDegrees} to {markerDegrees/3} because of distance {distanceCamToMarker}")
-        markerDegrees = round(markerDegrees / 3)
+    # for distances > 1500 markerYaw are not accurate, reduce value
+    if marker.distanceCamToMarker > 1500:
+        config.log(f"corrected markerYaw from {marker.markerLocation.yaw} to {marker.markerLocation.yaw/3} because of distance {marker.distanceCamToMarker}")
+        marker.markerLocation.yaw = round(marker.markerLocation.yaw / 3)
 
-    log(f"markerId: {markerId}, distanceCamToMarker: {distanceCamToMarker:.0f}, angleToMarker: {angleToMarker:.2f}, markerDegrees: {markerDegrees:.2f}")
+    log(f"markerId: {marker.markerId}, distanceCamToMarker: {marker.distanceCamToMarker:.0f}, angleInImage: {marker.angleInImage:.2f}, markerYaw: {marker.markerLocation.yaw:.2f}")
 
-    return {'markerId': markerId,
-            'distanceCamToMarker': int(distanceCamToMarker),
-            'angleToMarker': round(angleToMarker),
-            'markerDegrees': round(markerDegrees)}
 
 
 def calculateCartMovesForDockingPhase1(corners):
@@ -308,14 +312,14 @@ def calculateCartMovesForDockingPhase1(corners):
     # eval the marker's yaw (the yaw of the marker itself evaluated from the marker corners)
     rmat = cv2.Rodrigues(vec[0])[0]
     yrp = rotationMatrixToEulerAngles(rmat)
-    markerDegrees = -np.degrees(yrp[0])  # ATTENTION, this is the yaw of the marker evaluated from the image
+    markerYaw = -np.degrees(yrp[0])  # ATTENTION, this is the yaw of the marker evaluated from the image
 
-    # orthoAngle = markerAngleInImage + markerDegrees
-    orthoAngle = markerDegrees
+    # orthoAngle = markerAngleInImage + markerYaw
+    orthoAngle = markerYaw
     xCorr = (marker.orthoStopDist) * np.sin(np.radians(orthoAngle))
     yCorr = (marker.orthoStopDist) * np.cos(np.radians(orthoAngle))
     log(
-        f"markerDegrees: {markerDegrees:.1f}, orthoAngle: {orthoAngle:.1f}, xCorr: {xCorr:.0f}, yCorr: {yCorr:.0f}")
+        f"markerYaw: {markerYaw:.1f}, orthoAngle: {orthoAngle:.1f}, xCorr: {xCorr:.0f}, yCorr: {yCorr:.0f}")
 
     # cart target position is marker's orthogonal point at distance
     # use the offset to account for the x-difference of the docking detail marker center vs the docking marker center
@@ -347,12 +351,12 @@ def calculateCartMovesForDockingPhase2(corners):
     # eval the marker's yaw (the yaw of the marker itself evaluated from the marker corners)
     rmat = cv2.Rodrigues(vec[0])[0]
     yrp = rotationMatrixToEulerAngles(rmat)
-    markerDegrees = np.degrees(yrp[0])  # ATTENTION, this is the yaw of the marker evaluated from the image
+    markerYaw = np.degrees(yrp[0])  # ATTENTION, this is the yaw of the marker evaluated from the image
 
     # rotate only if we are not orthogonal to the marker
     rotation = 0
-    if abs(markerDegrees) > 2:
-        rotation = markerDegrees
+    if abs(markerYaw) > 2:
+        rotation = markerYaw
 
     log(f"rotation: {rotation:.0f}, xOffsetMarker: {xOffsetMarker:.0f}, distanceCamToMarker: {distanceCamToMarker:.0f}")
 
@@ -377,20 +381,20 @@ def initAruco():
 
     takeCalibrationPicturesCartcam = False
     if takeCalibrationPicturesCartcam:
-        path = "d:/Projekte/InMoov/aruco/cartcamCalibration/"
+        path = "/home/marvin/InMoov/aruco/cartcamCalibration/"
         camID = 1
         #calibration.takeCalibrationPictures(path, camID, 0)
         createCalibrationMatrixFromImages(path)
         raise SystemExit(0)
 
 
-    data = np.load("d:/Projekte/InMoov/imageProcessing/arucoFiles/cartcamCalibration/calibration.npz")
+    data = np.load("/home/marvin/InMoov/imageProcessing/arucoFiles/cartcamCalibration/calibration.npz")
     config.cartcamMatrix = data['cameraMatrix']
     config.cartcamDistortionCoeffs = data['distortionCoeffs'][0]
 
-    data = np.load("d:/Projekte/InMoov/imageProcessing/arucoFiles/eyecamCalibration/calibration.npz")
-    config.calibrationMatrix[mg.EYE_CAM] = data['cameraMatrix']
-    config.calibrationDistortion[mg.EYE_CAM] = data['distortionCoeffs'][0]
+    data = np.load("/home/marvin/InMoov/imageProcessing/arucoFiles/eyecamCalibration/calibration.npz")
+    config.calibrationMatrix[mg.CamTypes.EYE_CAM.value] = data['cameraMatrix']
+    config.calibrationDistortion[mg.CamTypes.EYE_CAM.value] = data['distortionCoeffs'][0]
 
 
 def createMarkers():
@@ -509,18 +513,18 @@ if __name__ == "__main__":
             file = False
             if file:
                 filename = "C:/Users/marvin/Desktop/000_000_300_-30.jpg"
-                config.cams[mg.EYE_CAM].loadImage(filename)
-                config.cams[mg.CART_CAM].loadImages(filename)
+                config.cams[mg.CamTypes.EYE_CAM].loadImage(filename)
+                config.cams[mg.CamTypes.CART_CAM].loadImages(filename)
 
             else:
-                config.cams[mg.EYE_CAM].takeImage()
-                config.cams[mg.CART_CAM].takeImage()
+                config.cams[mg.CamTypes.EYE_CAM].takeImage()
+                config.cams[mg.CamTypes.CART_CAM].takeImage()
 
             # CARTCAM
-            if config.cams[mg.CART_CAM].image is not None:
-                cv2.imshow("cartCam", config.cams[mg.CART_CAM].image)
+            if config.cams[mg.CamTypes.CART_CAM].image is not None:
+                cv2.imshow("cartCam", config.cams[mg.CamTypes.CART_CAM].image)
 
-                ids, corners = findMarkers(mg.CART_CAM, False)
+                ids, corners = findMarkers(mg.CamTypes.CART_CAM, False)
                 if ids is not None:
                     print(ids)
                     for markerIndex, foundId in enumerate(ids):
@@ -534,10 +538,10 @@ if __name__ == "__main__":
 
 
             # EYECAM
-            if config.cams[mg.EYE_CAM].image is not None:
-                cv2.imshow("eyeCam", config.cams[mg.EYE_CAM].image)
+            if config.cams[mg.CamTypes.EYE_CAM].image is not None:
+                cv2.imshow("eyeCam", config.cams[mg.CamTypes.EYE_CAM].image)
 
-                ids, corners = findMarkers(mg.EYE_CAM, False)
+                ids, corners = findMarkers(mg.CamTypes.EYE_CAM, False)
 
                 if ids is not None:
                     print(ids)

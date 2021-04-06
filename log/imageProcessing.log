@@ -1,13 +1,13 @@
-14:37:54.378 - connect with cartcam
-14:37:54.931 - cartcam, deviceId: 3 - failed to capture image
-14:37:55.861 - connect with eyecam
-14:37:56.529 - eyecam, deviceId: 1 - image successfully taken
-14:37:56.925 - start D415 stream successful
-14:37:58.286 - D415 stream stopped
-14:37:58.369 - start D415 stream successful
-14:37:59.068 - D415 rgb available
-14:37:59.112 - D415 depth points available
-14:37:59.167 - start forward move monitoring thread
-14:37:59.168 - obstacle monitoring thread is running
-14:37:59.169 - waiting for imageProcessing commands
-14:38:00.268 - D415 stream stopped
+11:49:24.358 - connect with cartcam
+11:49:24.859 - cartcam, deviceId: 3 - failed to capture image
+11:49:24.860 - connect with eyecam
+11:49:25.362 - eyecam, deviceId: 1 - failed to capture image
+11:49:26.476 - start D415 stream successful
+11:49:26.631 - D415 stream stopped
+11:49:27.642 - start D415 stream successful
+11:49:28.310 - D415 rgb available
+11:49:28.472 - D415 depth points available
+11:49:28.519 - start forward move monitoring thread
+11:49:28.520 - waiting for imageProcessing commands
+11:49:28.522 - obstacle monitoring thread is running
+11:49:28.526 - D415 stream stopped

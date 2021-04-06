@@ -24,10 +24,11 @@ class Camera(object):
         self.imgXCenter = int(self.cols/2)
 
         self.handle = None
-
+        self.image = None
 
     def saveImage(self, path):
         cv2.imwrite(path, self.image)
+
 
 class UsbCamera(Camera):
 
@@ -39,8 +40,6 @@ class UsbCamera(Camera):
         except Exception as e:
             config.log(f"could not connect with cam {self.name}")
             self.handle = None
-
-        self.image = None
 
 
     def getResolution(self):
@@ -78,6 +77,7 @@ class UsbCamera(Camera):
             self.handle = None
             return False
 
+
     def loadImage(self, file):
         self.image = cv2.imread(file)
 
@@ -88,13 +88,11 @@ class D415Camera(Camera):
     def __init__(self, properties):
         super().__init__(properties)
 
-        self.handle = None
         self.D415config = None
         self.streaming:bool = False
 
         self.pc = rs.pointcloud()
         self.colorizer = rs.colorizer()
-        self.image = None
         self.depth = None
         self.depthColored = None
 

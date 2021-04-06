@@ -45,7 +45,7 @@ def calculateCamXYZ(useHeadImu=True):
         #return -68, (0, 0.267, 1.5)  # ground watch values
         return -45, (0,0.25,1.56) # wall watch values with headNeck -15
 
-    headImu = config.marvinShares.cartDict.get(mg.SharedDataItem.HEAD_IMU)
+    headImu = config.marvinShares.cartDict.get(mg.SharedDataItems.HEAD_IMU)
     neckToCamDist = np.hypot(d415.D415_Y, d415.D415_Z)
     camPosAngle = np.degrees(np.arctan(d415.D415_Z / d415.D415_Y)) + headImu.pitch
 
